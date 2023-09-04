@@ -77,9 +77,16 @@ For better understanding the topic, read through:
 
 After completing everything above, you should be able to answer (and understand why) the following questions:
 - What purpose does [`Default`] trait serve in [Rust]?
+    * Convinience. It provides an easy way to construct objects.
 - What is `#[derive(Default)]` from `std` capable of? What does it wrong? Which are alternatives?
+    * It can automaticly implement `Default` trait for structs which feilds implement the `Default` trait
 - What does [`Clone`] mean semantically?
-- What does [`Copy`] mean semantically? How is it connected with [`Clone`]? Which limitations does it have and why?
+    * That the type has an opportunity to duplicate a value of itself
+- What does [`Copy`] mean semantically? How is it connected with [`Clone`]? Which 
+limitations does it have and why?
+    * That for the values of this types the 'copy' semantics is in effect. When transferring ownership of a value takes place it is copied instead of being moved.
+    * When one should copy the value following copy semantics the copy is ususally produced by cally `clone` method.
+    * Clone might be expensive, so it is might be undesirable to copy such values instead of moving them.
 
 
 

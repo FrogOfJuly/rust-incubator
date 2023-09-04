@@ -88,11 +88,22 @@ For better understanding [`Pin`] purpose, design, limitations and use cases read
 
 After completing everything above, you should be able to answer (and understand why) the following questions:
 - What does "boxing" mean in [Rust]? How is it useful? When and why is it required?
+    * Boxing means that data is hidden behind the pointer. Usually on a heap. It is usefull and required if the size of data is unknown. 
 - What is [`Pin`] and why is it required? What guarantees does it provide? How does it fulfill them?
+    * Pin required for handling self-ref data. As it is unsafe to move it restricts this ablitity.
+    * It does not allow to get mut reference for pinned value.
 - How does [`Unpin`] affect the [`Pin`]? What does it mean?
-- Is it allowed to move pinned data after the [`Pin`] dies? Why?
+    * Unpin cancells Pin effect.
+    * It means that it is possible to hadnle data as if it is unpinned
+- Is it allowed to move pinned data after the [`Pin`] dies? 
+Why?
+    * It is allowed. 
+    * Death of Pin marks the end of code which relies on it.
 - What is structural pinning? When it should be used and why?
+    * Structural pinning is where pin propogates to structure's fields.
+    * When it undesirable to call functions which expect pinned value.
 - What is [`Pin`] projection? Why does it exist? How is it used?
+    * It is used to implement structural pinning.
 
 
 
