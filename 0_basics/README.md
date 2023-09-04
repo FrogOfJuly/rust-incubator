@@ -120,3 +120,8 @@ _Additional_ articles, which may help to understand the above topic better:
 [15]: https://dev.to/vikram2784/beyond-pointers-how-rust-outshines-c-with-its-borrow-checker-1mad
 [16]: https://sabrinajewson.org/blog/null-lifetime
 [17]: https://claytonwramsey.github.io/2023/08/14/dumpster.html
+
+
+1. Heigine
+2. Test's
+3. Autotraits: structural vs nominative
