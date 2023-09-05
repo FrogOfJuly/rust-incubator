@@ -192,10 +192,17 @@ Provide conversion and `Deref` implementations for these types on your choice, t
 
 After completing everything above, you should be able to answer (and understand why) the following questions:
 - How value-to-value conversion is represented in [Rust]? What is relation between fallible and infallible one?
+    * it is represented as 'as' for simple types and as `[Try]From` and `[Try]Into` traits. `Try*` traits represent fallable conversion
 - How reference-to-reference conversion is represented in [Rust]? How its traits differ? When and which one should be used?
+    * AsRef and AsMut pair and repsected borrowing traits. On used for representing types that behave alike, another is used for preseving `Eq`, `Ord`` and `Hash`. 
 - How can inner-to-outer reference conversion be achieved in [Rust]? Which prerequisites does it have?
 - What is dereferencing in [Rust]? How it can be abused? Why it shouldn't be abused?
+    * `Deref` is a trait for defining into what type should a given one dereference. 
+    * It can be abused by altering its semantics. 
+    * Becouse it is not an inteded usage. It seems like inheritance on the surface, but when observing closely does not provide all nice things inherentance does.
 - Why using [`as`] keyword is not a good practice in [Rust]? Why do we still use it?
+    * it is used as explicit type conversion for simple types. 
+    * For explicity
 
 
 
