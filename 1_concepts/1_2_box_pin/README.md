@@ -103,7 +103,7 @@ Why?
     * Structural pinning is where pin propogates to structure's fields.
     * When it undesirable to call functions which expect pinned value.
 - What is [`Pin`] projection? Why does it exist? How is it used?
-    * It is used to implement structural pinning.
+    * It is used to implement access to some part of pinned data.
 
 
 

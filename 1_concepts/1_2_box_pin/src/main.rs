@@ -46,11 +46,9 @@ impl<T: Default> MutMeSomehow for Rc<T> {
 
 impl<T: fmt::Debug> SayHi for Vec<T> {}
 
-impl<T> MutMeSomehow for Vec<T> {
-    fn mut_me_somehow(self: Pin<&mut Vec<T>>) {
-        // let x = self.get_mut();
-        // x.clear();
-        //Vector implements unpin only for types that implement unpin
+impl<T: Default> MutMeSomehow for Vec<T> {
+    fn mut_me_somehow(mut self: Pin<&mut Vec<T>>) {
+        self.set(vec![])
     }
 }
 
