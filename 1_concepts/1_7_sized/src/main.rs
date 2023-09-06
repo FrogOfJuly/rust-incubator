@@ -1,6 +1,6 @@
 #![feature(trait_alias)]
 
-use std::{borrow::Cow, mem::replace};
+use std::borrow::Cow;
 
 trait Command {}
 
@@ -8,9 +8,9 @@ trait CommandHandler<C: Command> {
     type Context: ?Sized;
     type Result;
 
-    fn handle_command(&self, cmd: &C, ctx: &Self::Context) -> Self::Result;
+    fn handle_command(&self, cmd: &C, ctx: &mut Self::Context) -> Self::Result;
 }
-
+#[derive(Clone)]
 struct User {
     id: u64,
     email: Cow<'static, str>,
@@ -24,39 +24,18 @@ trait Storage<K, V> {
 }
 trait UserStorage = Storage<String, User>;
 
+#[derive(Debug)]
 struct UserError {
     cause: String,
 }
 
-struct UserRepository {
-    storage: Box<dyn UserStorage>,
+trait UserRepository: Storage<String, User> {
+    fn replace_storage(&mut self, storage: Box<dyn UserStorage>) -> Box<dyn UserStorage>;
 }
 
-impl UserRepository {
-    pub fn new(storage: Box<dyn UserStorage>) -> Self {
-        Self { storage }
-    }
-
-    pub fn replace_storage(&mut self, storage: Box<dyn UserStorage>) -> Box<dyn UserStorage> {
-        replace(&mut self.storage, storage)
-    }
+struct CreateUser {
+    key: String,
 }
-
-impl Storage<String, User> for UserRepository {
-    fn set(&mut self, key: String, val: User) {
-        self.storage.set(key, val)
-    }
-
-    fn get(&self, key: &String) -> Option<&User> {
-        self.storage.get(key)
-    }
-
-    fn remove(&mut self, key: &String) -> Option<User> {
-        self.storage.remove(key)
-    }
-}
-
-struct CreateUser;
 
 impl Command for CreateUser {}
 
@@ -64,10 +43,92 @@ impl CommandHandler<CreateUser> for User {
     type Context = dyn UserRepository;
     type Result = Result<(), UserError>;
 
-    fn handle_command(&self, cmd: &CreateUser, ctx: &Self::Context) -> Self::Result {
-        // Here we operate with UserRepository
-        // via its trait object: &dyn UserRepository
-        todo!()
+    fn handle_command(
+        &self,
+        CreateUser { key }: &CreateUser,
+        ctx: &mut Self::Context,
+    ) -> Self::Result {
+        if ctx.get(key).is_some() {
+            return Err(UserError {
+                cause: "User exists".to_owned(),
+            });
+        }
+        ctx.set(key.clone(), self.clone());
+        Ok(())
+    }
+}
+
+mod testing {
+    use std::borrow::Cow;
+
+    use crate::{CommandHandler, CreateUser, Storage, User, UserRepository};
+
+    const JOHN_GOLT: &User = &User {
+        id: 52,
+        email: Cow::Borrowed(""),
+        activated: true,
+    };
+    struct BadStorage;
+
+    impl Storage<String, User> for BadStorage {
+        fn set(&mut self, _key: String, _val: User) {}
+
+        fn get(&self, _key: &String) -> Option<&User> {
+            if rand::random() {
+                Some(JOHN_GOLT)
+            } else {
+                None
+            }
+        }
+
+        fn remove(&mut self, _key: &String) -> Option<User> {
+            None
+        }
+    }
+
+    impl UserRepository for BadStorage {
+        fn replace_storage(
+            &mut self,
+            storage: Box<dyn crate::UserStorage>,
+        ) -> Box<dyn crate::UserStorage> {
+            storage
+        }
+    }
+
+    #[test]
+    pub fn test_with_fails() {
+        let emails = [
+            "Carl@gmail.com",
+            "Meh@gmail.com",
+            "Moh@gmail.com",
+            "Simple@gmail.com",
+        ];
+        let act = [true, false];
+
+        let keys = ["Carl", "Meh", "Moh", "Simple"];
+
+        emails
+            .iter()
+            .enumerate()
+            .zip(act.into_iter().cycle())
+            .map(|((id, email), activated)| User {
+                id: id as u64,
+                email: Cow::Borrowed(email),
+                activated,
+            })
+            .zip(keys.iter())
+            .fold(BadStorage, |mut storage, (usr, &key)| {
+                if let Err(err) = usr.handle_command(
+                    &CreateUser {
+                        key: key.to_owned(),
+                    },
+                    &mut storage,
+                ) {
+                    println!("Error: {:?}", err);
+                }
+
+                storage
+            });
     }
 }
 
