@@ -81,7 +81,9 @@ If neither `APP_CONF` env var nor `--conf` command line argument is specified, t
 
 After completing everything above, you should be able to answer (and understand why) the following questions:
 - What is [`Cow`]? How it works?
+    * Cow is an abstraction over borrowing with Copy On Wrinte sematics
 - When [`Cow`] is useful and why? Give some meaningful examples.
+    * To unify borrowed and owned data. Usually used to avoid unnessesary allocations.
 
 
 
