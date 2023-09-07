@@ -173,10 +173,16 @@ Implement `UserRepository` type with injectable `Storage` implementation, which 
 
 After completing everything above, you should be able to answer (and understand why) the following questions:
 - What is dispatch? When a function call represents a dispatch and when not?
+    * If there is a generic then there is a dispatch
 - How does static dispatch work?
-- How does dynamic dispatch work? Why is it required? Which limitations does it have in [Rust]? Why does it have them?
+    * Function is duplicated for each type it is called with
+- How does dynamic dispatch work? Why is it required? Which 
+limitations does it have in [Rust]? Why does it have them?
+    * It is required to handle user provided types that are unknown in advance
 - When dynamic dispatch can be replaced with static dispatch? When not? What are the trade-offs?
+    * Dynamic dispatch is slower by several pointer inderection. It can be replaced by static dispatch when all the types are known in compile time. Traid-offs are flexiblity and speed
 - How can we reduce the size of compiler-generated code when using static dispatch?
+    * Yes, by isolating generic-free code to separate function
 
 
 
