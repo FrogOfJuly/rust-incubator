@@ -62,7 +62,7 @@ After completing everything above, you should be able to answer (and understand 
     * Every time the type consists of sized fields
     * When theere are unsized fields or if the type is a trait object
 - Why `?Sized` trait bound is important? When should we use it and why?
-    * It is important becaus it permits to handle unsized data in a generic way
+    * It is important because it permits to handle unsized data in a generic way
 
 
 
