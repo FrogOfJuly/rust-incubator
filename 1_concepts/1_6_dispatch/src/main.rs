@@ -8,6 +8,7 @@ trait Storage<K, V> {
     fn remove(&mut self, key: &K) -> Option<V>;
 }
 
+#[derive(Clone)]
 struct User {
     id: u64,
     email: Cow<'static, str>,
@@ -16,42 +17,109 @@ struct User {
 
 trait UserStorage = Storage<String, User>;
 
-mod static_dispatch {
-    use crate::{UserStorage, User, Storage};
+struct UserRepositoryError {
+    cause: String,
+}
 
-    //??
+mod static_dispatch {
+    use crate::{Storage, User, UserStorage, UserRepositoryError};
+    use std::{cell::RefCell, rc::Rc};
+
+    struct UserRepository<T: UserStorage> {
+        storage: Rc<RefCell<T>>,
+    }
+
+    impl<T: UserStorage> UserRepository<T> {
+        pub fn new(storage: T) -> Self {
+            Self {
+                storage: Rc::new(RefCell::new(storage)),
+            }
+        }
+    }
+
+    impl<T: UserStorage> UserRepository<T> {
+        fn get(&self, key: &String) -> Option<User> {
+            self.storage.borrow().get(key).cloned()
+        }
+
+        fn add(&self, key: String, user: User) -> Result<(), UserRepositoryError> {
+            if self.get(&key).is_some() {
+                return Err(UserRepositoryError {
+                    cause: "This user already exists".to_owned(),
+                });
+            }
+
+            self.storage.borrow_mut().set(key, user);
+
+            Ok(())
+        }
+
+        fn update(&self, key: &String, upd: User) -> Result<(), UserRepositoryError> {
+            if self.get(&key).is_none() {
+                return Err(UserRepositoryError {
+                    cause: "This user does not exists".to_owned(),
+                });
+            }
+
+            self.storage.borrow_mut().set(key.to_owned(), upd);
+
+            Ok(())
+        }
+
+        fn remove(&self, key: &String) -> Option<User> {
+            self.storage.borrow_mut().remove(key)
+        }
+    }
 }
 
 mod dynamic_dispatch {
-    use std::mem::replace;
+    use std::{cell::RefCell, rc::Rc};
 
-    use crate::{UserStorage, User, Storage};
+    use crate::{Storage, User, UserRepositoryError, UserStorage};
 
     struct UserRepository {
-        storage: Box<dyn UserStorage>,
+        storage: Rc<RefCell<Box<dyn UserStorage>>>,
     }
 
     impl UserRepository {
         pub fn new(storage: Box<dyn UserStorage>) -> Self {
-            Self { storage }
-        }
-
-        pub fn replace_storage(&mut self, storage: Box<dyn UserStorage>) -> Box<dyn UserStorage> {
-            replace(&mut self.storage, storage)
+            Self {
+                storage: Rc::new(RefCell::new(storage)),
+            }
         }
     }
 
-    impl Storage<String, User> for UserRepository{
-        fn set(&mut self, key: String, val: User) {
-            self.storage.set(key, val)
+    impl UserRepository {
+        fn get(&self, key: &String) -> Option<User> {
+            self.storage.borrow().get(key).cloned()
         }
 
-        fn get(&self, key: &String) -> Option<&User> {
-            self.storage.get(key)
+        fn add(&self, key: String, user: User) -> Result<(), UserRepositoryError> {
+            if self.get(&key).is_some() {
+                return Err(UserRepositoryError {
+                    cause: "This user already exists".to_owned(),
+                });
+            }
+
+            self.storage.borrow_mut().set(key, user);
+
+            Ok(())
         }
 
-        fn remove(&mut self, key: &String) -> Option<User> {
-            self.storage.remove(key)
+        fn update(&self, key: &String, upd: User) -> Result<(), UserRepositoryError> {
+            if self.get(&key).is_none() {
+                return Err(UserRepositoryError {
+                    cause: "This user does not exists".to_owned(),
+                });
+            }
+
+            self.storage.borrow_mut().set(key.to_owned(), upd);
+
+            Ok(())
+        }
+
+        fn remove(&self, key: &String) -> Option<User> {
+            self.storage.borrow_mut().remove(key)
         }
     }
 }
