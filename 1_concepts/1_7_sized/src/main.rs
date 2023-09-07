@@ -2,35 +2,45 @@
 
 use std::borrow::Cow;
 
+trait Storage<K, V> {
+    fn set(&mut self, key: K, val: V);
+    fn get(&self, key: &K) -> Option<&V>;
+    fn remove(&mut self, key: &K) -> Option<V>;
+}
+
+#[derive(Clone)]
+pub struct User {
+    id: u64,
+    email: Cow<'static, str>,
+    activated: bool,
+}
+
+pub struct UserRepositoryError {
+    cause: String,
+}
+
+mod dynamic_dispatch {
+    use crate::{User, UserRepositoryError};
+
+    #[allow(clippy::ptr_arg)]
+    pub trait UserRepository {
+        fn get(&self, key: &String) -> Option<User>;
+
+        fn add(&self, key: String, user: User) -> Result<(), UserRepositoryError>;
+
+        fn update(&self, key: &String, upd: User) -> Result<(), UserRepositoryError>;
+
+        fn remove(&self, key: &String) -> Option<User>;
+    }
+}
+
 trait Command {}
 
 trait CommandHandler<C: Command> {
     type Context: ?Sized;
     type Result;
 
-    fn handle_command(&self, cmd: &C, ctx: &mut Self::Context) -> Self::Result;
-}
-#[derive(Clone)]
-struct User {
-    id: u64,
-    email: Cow<'static, str>,
-    activated: bool,
-}
-
-trait Storage<K, V> {
-    fn set(&mut self, key: K, val: V);
-    fn get(&self, key: &K) -> Option<&V>;
-    fn remove(&mut self, key: &K) -> Option<V>;
-}
-trait UserStorage = Storage<String, User>;
-
-#[derive(Debug)]
-struct UserError {
-    cause: String,
-}
-
-trait UserRepository: Storage<String, User> {
-    fn replace_storage(&mut self, storage: Box<dyn UserStorage>) -> Box<dyn UserStorage>;
+    fn handle_command(&self, cmd: &C, ctx: &Self::Context) -> Self::Result;
 }
 
 struct CreateUser {
@@ -40,95 +50,117 @@ struct CreateUser {
 impl Command for CreateUser {}
 
 impl CommandHandler<CreateUser> for User {
-    type Context = dyn UserRepository;
-    type Result = Result<(), UserError>;
+    type Context = dyn dynamic_dispatch::UserRepository;
+    type Result = Result<(), UserRepositoryError>;
 
-    fn handle_command(
-        &self,
-        CreateUser { key }: &CreateUser,
-        ctx: &mut Self::Context,
-    ) -> Self::Result {
-        if ctx.get(key).is_some() {
-            return Err(UserError {
-                cause: "User exists".to_owned(),
-            });
-        }
-        ctx.set(key.clone(), self.clone());
-        Ok(())
+    fn handle_command(&self, CreateUser { key }: &CreateUser, ctx: &Self::Context) -> Self::Result {
+        ctx.add(key.clone(), self.clone())
     }
 }
 
 mod testing {
-    use std::borrow::Cow;
+    use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
-    use crate::{CommandHandler, CreateUser, Storage, User, UserRepository};
-
-    const JOHN_GOLT: &User = &User {
-        id: 52,
-        email: Cow::Borrowed(""),
-        activated: true,
+    use crate::{
+        dynamic_dispatch::UserRepository, CommandHandler, Storage, User, UserRepositoryError,
     };
-    struct BadStorage;
 
-    impl Storage<String, User> for BadStorage {
-        fn set(&mut self, _key: String, _val: User) {}
+    trait UserStorage = Storage<String, User>;
 
-        fn get(&self, _key: &String) -> Option<&User> {
-            if rand::random() {
-                Some(JOHN_GOLT)
-            } else {
-                None
+    impl UserStorageRepository {
+        pub fn new(storage: Box<dyn UserStorage>) -> Self {
+            Self {
+                storage: Rc::new(RefCell::new(storage)),
             }
-        }
-
-        fn remove(&mut self, _key: &String) -> Option<User> {
-            None
         }
     }
 
-    impl UserRepository for BadStorage {
-        fn replace_storage(
-            &mut self,
-            storage: Box<dyn crate::UserStorage>,
-        ) -> Box<dyn crate::UserStorage> {
-            storage
+    struct UserStorageRepository {
+        storage: Rc<RefCell<Box<dyn UserStorage>>>,
+    }
+
+    impl UserRepository for UserStorageRepository {
+        fn get(&self, key: &String) -> Option<User> {
+            self.storage.borrow().get(key).cloned()
+        }
+
+        fn add(&self, key: String, user: User) -> Result<(), UserRepositoryError> {
+            if self.get(&key).is_some() {
+                return Err(UserRepositoryError {
+                    cause: "This user already exists".to_owned(),
+                });
+            }
+
+            self.storage.borrow_mut().set(key, user);
+
+            Ok(())
+        }
+
+        fn update(&self, key: &String, upd: User) -> Result<(), UserRepositoryError> {
+            if self.get(key).is_none() {
+                return Err(UserRepositoryError {
+                    cause: "This user does not exists".to_owned(),
+                });
+            }
+
+            self.storage.borrow_mut().set(key.to_owned(), upd);
+
+            Ok(())
+        }
+
+        fn remove(&self, key: &String) -> Option<User> {
+            self.storage.borrow_mut().remove(key)
+        }
+    }
+
+    #[derive(Default)]
+    struct InternalStorage {
+        container: HashMap<String, User>,
+    }
+
+    impl Storage<String, User> for InternalStorage {
+        fn set(&mut self, key: String, val: User) {
+            self.container.insert(key, val);
+        }
+
+        fn get(&self, key: &String) -> Option<&User> {
+            self.container.get(key)
+        }
+
+        fn remove(&mut self, key: &String) -> Option<User> {
+            self.container.remove(key)
         }
     }
 
     #[test]
-    pub fn test_with_fails() {
-        let emails = [
-            "Carl@gmail.com",
-            "Meh@gmail.com",
-            "Moh@gmail.com",
-            "Simple@gmail.com",
-        ];
-        let act = [true, false];
-
-        let keys = ["Carl", "Meh", "Moh", "Simple"];
-
-        emails
-            .iter()
+    fn test() {
+        let users: Vec<_> = ["Carl", "Klara", "Dmirtriy", "Meh"]
+            .into_iter()
+            .map(|name| name.to_owned())
+            .map(|name| (name.clone(), name + "@gmail.com"))
             .enumerate()
-            .zip(act.into_iter().cycle())
-            .map(|((id, email), activated)| User {
-                id: id as u64,
-                email: Cow::Borrowed(email),
-                activated,
-            })
-            .zip(keys.iter())
-            .fold(BadStorage, |mut storage, (usr, &key)| {
-                if let Err(err) = usr.handle_command(
-                    &CreateUser {
-                        key: key.to_owned(),
+            .map(|(id, (key, email))| {
+                (
+                    key,
+                    User {
+                        id: id as u64,
+                        email: std::borrow::Cow::Owned(email),
+                        activated: false,
                     },
-                    &mut storage,
-                ) {
-                    println!("Error: {:?}", err);
-                }
+                )
+            })
+            .collect();
 
-                storage
-            });
+        let ctx = UserStorageRepository::new(Box::new(InternalStorage::default()));
+        users.iter().for_each(|(key, usr)| {
+            let cmd_res = usr.handle_command(&crate::CreateUser { key: key.clone() }, &ctx);
+            assert!(cmd_res.is_ok());
+        });
+
+        users.iter().for_each(|(key, usr)| {
+            let cmd_res = usr.handle_command(&crate::CreateUser { key: key.clone() }, &ctx);
+            assert!(cmd_res.is_err());
+        });
     }
 }
 
